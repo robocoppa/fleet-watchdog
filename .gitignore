@@ -1,0 +1,16 @@
+# State persisted by the receiver (last-seen per bot). Runtime data, not source.
+state.json
+*.state.json
+
+# Local secrets — never commit the watcher-bot token or chat id.
+.env
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+.ruff_cache/
+.pytest_cache/
+*.egg-info/
+dist/
+build/

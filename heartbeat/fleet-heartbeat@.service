@@ -1,0 +1,18 @@
+# Templated systemd unit — one instance per bot.
+#   sudo cp heartbeat.sh /usr/local/bin/fleet-heartbeat.sh && sudo chmod +x $_
+#   sudo cp fleet-heartbeat@.service fleet-heartbeat@.timer /etc/systemd/system/
+#   sudo mkdir -p /etc/fleet-heartbeat
+#   sudo cp env.example /etc/fleet-heartbeat/hermes-claudette.env  # then edit
+#   sudo systemctl enable --now fleet-heartbeat@hermes-claudette.timer
+#
+# The instance name (%i) is the bot id and selects the env file.
+
+[Unit]
+Description=Fleet heartbeat for bot %i
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/fleet-heartbeat/%i.env
+ExecStart=/usr/local/bin/fleet-heartbeat.sh

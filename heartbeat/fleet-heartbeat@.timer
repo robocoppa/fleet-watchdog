@@ -1,0 +1,15 @@
+# Fires the heartbeat for bot %i every 2 minutes (with a small randomized
+# delay so a fleet of laptops doesn't all hit Unraid on the same second).
+#   sudo systemctl enable --now fleet-heartbeat@hermes-claudette.timer
+
+[Unit]
+Description=Fleet heartbeat timer for bot %i
+
+[Timer]
+OnBootSec=30s
+OnUnitActiveSec=2min
+RandomizedDelaySec=20s
+AccuracySec=5s
+
+[Install]
+WantedBy=timers.target

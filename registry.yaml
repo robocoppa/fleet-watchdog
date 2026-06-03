@@ -1,0 +1,29 @@
+# Fleet registry — which bots exist and how aggressively to alert on each.
+# Re-read every watchdog tick, so edits apply without a container restart.
+#
+# Per-bot keys (all optional; sensible defaults shown):
+#   expected_up:         true   # false = transient laptop, don't nag when asleep
+#   stale_after:         600    # seconds without a heartbeat before "stale"
+#   alert_on_send_fail:  true   # alert if the bot reports it can't send on Telegram
+#   alert_on_token_fail: true   # alert if getMe fails (token revoked / TG outage)
+#   alert_on_backend_fail: false # alert if the model backend is unreachable
+#
+# The `bot:` ids here MUST match the WATCHDOG_BOT value the laptop sends.
+
+bots:
+  # Always-on Hermes on the claudette laptop. Tight threshold.
+  hermes-claudette:
+    expected_up: true
+    stale_after: 300
+
+  # An OpenClaw daemon you keep running on a desk machine.
+  openclaw-desk1:
+    expected_up: true
+    stale_after: 600
+    alert_on_backend_fail: true   # this one's backend is the always-on Ollama
+
+  # A roaming laptop that comes and goes — present in /status, but no alert
+  # when it sleeps. Flip expected_up to true if you want to be told.
+  openclaw-roaming:
+    expected_up: false
+    stale_after: 900

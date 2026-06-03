@@ -1,0 +1,33 @@
+# Fleet watchdog — standalone compose stack (mirrors how monitoring/ is
+# separate from Audrey's root compose). Joins the external ollama-net so it
+# can be reached at fleet-watchdog:9099 from inside the network, and is
+# published on the host LAN at 192.168.1.11:9099 so roaming laptops can POST.
+#
+# Deploy on Unraid:
+#   cd /mnt/user/appdata/fleet-watchdog
+#   cp .env.example .env   # fill WATCHDOG_TOKEN + WATCHDOG_CHAT_ID
+#   docker compose up -d --build
+
+services:
+  fleet-watchdog:
+    build: .
+    container_name: fleet-watchdog
+    restart: unless-stopped
+    ports:
+      - "9099:9099"
+    environment:
+      WATCHDOG_TOKEN: ${WATCHDOG_TOKEN:-}
+      WATCHDOG_CHAT_ID: ${WATCHDOG_CHAT_ID:-}
+      WATCHDOG_DEFAULT_STALE: ${WATCHDOG_DEFAULT_STALE:-600}
+      WATCHDOG_TICK: ${WATCHDOG_TICK:-60}
+    volumes:
+      # Registry is editable on the host; re-read every tick (no restart needed).
+      - ./registry.yaml:/config/registry.yaml:ro
+      # Persisted last-seen state survives container restarts.
+      - ./data:/data
+    networks:
+      - ollama-net
+
+networks:
+  ollama-net:
+    external: true
