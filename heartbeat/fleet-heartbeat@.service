@@ -1,11 +1,22 @@
 # Templated systemd unit — one instance per bot.
-#   sudo cp heartbeat.sh /usr/local/bin/fleet-heartbeat.sh && sudo chmod +x $_
 #   sudo cp fleet-heartbeat@.service fleet-heartbeat@.timer /etc/systemd/system/
 #   sudo mkdir -p /etc/fleet-heartbeat
 #   sudo cp env.example /etc/fleet-heartbeat/hermes-claudette.env  # then edit
 #   sudo systemctl enable --now fleet-heartbeat@hermes-claudette.timer
 #
 # The instance name (%i) is the bot id and selects the env file.
+#
+# Runs heartbeat.sh DIRECTLY FROM THE CHECKOUT (no /usr/local/bin copy), so the
+# self-updater's `git pull` to the released tag IS the deploy — no reinstall,
+# no sudo to ship code.
+#
+# IMPORTANT — set User=/Group= and the checkout path below. This is a system
+# unit (installed in /etc/systemd/system), so it would otherwise run as root and
+# %h would resolve to /root. We run it as the login user who owns the checkout
+# so the self-updater (a --user job on the same checkout) and this beat agree on
+# one tree. Replace `youruser` in both User=/Group= and the ExecStart path.
+# (Prefer the --user install instead? See the alternative in README; then drop
+# User=/Group= and use %h.)
 
 [Unit]
 Description=Fleet heartbeat for bot %i
@@ -14,5 +25,9 @@ Wants=network-online.target
 
 [Service]
 Type=oneshot
+# Run as the checkout owner, not root. EDIT to your login user.
+User=youruser
+Group=youruser
 EnvironmentFile=/etc/fleet-heartbeat/%i.env
-ExecStart=/usr/local/bin/fleet-heartbeat.sh
+# Absolute path to heartbeat.sh in that user's checkout. EDIT `youruser`.
+ExecStart=/home/youruser/fleet-watchdog/heartbeat/heartbeat.sh

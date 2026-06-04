@@ -1,0 +1,21 @@
+# Fires the self-update on a slow cadence — this is a deploy poll, not the
+# heartbeat, so it runs far less often than every 5 min. 15 min with jitter is
+# plenty: after you move the `released` tag, the fleet converges within ~15 min.
+#   systemctl --user enable --now fleet-update.timer
+#
+# Persistent=true catches up one missed run after the machine was asleep/off, so
+# a laptop that was shut when you cut a release updates soon after it wakes,
+# rather than waiting for the next full interval.
+
+[Unit]
+Description=Fleet self-update timer (poll the released tag)
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=15min
+RandomizedDelaySec=2min
+Persistent=true
+AccuracySec=1min
+
+[Install]
+WantedBy=timers.target

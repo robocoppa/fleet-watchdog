@@ -7,19 +7,16 @@
   job runs a per-bot WRAPPER script that exports the vars then execs
   heartbeat.sh. cron-wrapper.sh already does exactly that — reuse it.
 
-  Install (one .plist per bot — rename for each). The SHARED script goes in
-  root-owned /usr/local/bin; the PER-BOT WRAPPER (holds a token) goes in
-  your HOME dir so no sudo / root-ownership is needed and a LaunchAgent can
-  read it:
-    sudo mkdir -p /usr/local/bin                                   # Apple Silicon: doesn't exist by default
-    sudo cp heartbeat/heartbeat.sh /usr/local/bin/fleet-heartbeat.sh
-    sudo chmod +x /usr/local/bin/fleet-heartbeat.sh
-
+  Install (one .plist per bot — rename for each). No /usr/local/bin copy: the
+  wrapper execs heartbeat.sh straight from the checkout, so the self-updater's
+  git pull is the whole deploy. Clone the repo in a dir you own (e.g.
+  ~/fleet-watchdog), then make a per-bot wrapper (holds a token) in your HOME:
     mkdir -p ~/.fleet-heartbeat
     cp heartbeat/cron-wrapper.sh ~/.fleet-heartbeat/brigitte.sh
     chmod 700 ~/.fleet-heartbeat/brigitte.sh
     # edit that wrapper: set BOT_ID, BOT_TOKEN, PROBE_CHAT, WATCHDOG_URL,
-    # HOST_LABEL; confirm its last line is: exec /usr/local/bin/fleet-heartbeat.sh
+    # HOST_LABEL; its last line execs $HOME/fleet-watchdog/heartbeat/heartbeat.sh
+    # (set FLEET_CHECKOUT in the wrapper if cloned elsewhere).
 
     # rename Label + ProgramArguments + log paths below for this bot, then:
     cp heartbeat/com.fleet-watchdog.heartbeat.plist.example \

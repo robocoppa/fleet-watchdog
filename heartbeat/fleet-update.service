@@ -1,0 +1,28 @@
+# Self-update unit — pulls the checkout to the `released` tag. Runs as the user
+# who owns the checkout (NOT root): the schedulers run heartbeat.sh straight
+# from the checkout, so updating the checkout is the whole deploy — no sudo, no
+# /usr/local/bin copy.
+#
+# Install (once per machine):
+#   # ensure the repo is cloned where this user owns it, e.g. ~/fleet-watchdog
+#   mkdir -p ~/.config/systemd/user
+#   cp heartbeat/fleet-update.service heartbeat/fleet-update.timer ~/.config/systemd/user/
+#   # set the checkout path below if it isn't ~/fleet-watchdog, then:
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now fleet-update.timer
+#   # to survive logout / run while not logged in:  sudo loginctl enable-linger $USER
+#
+# Why --user (not system): it runs as you, on your user-owned checkout, with
+# your git credentials/SSH agent — no root, matching the no-cp install layout.
+
+[Unit]
+Description=Fleet self-update (converge checkout on the released tag)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+# Point at the checkout. %h is the user's home; adjust if cloned elsewhere.
+Environment=FLEET_REPO_DIR=%h/fleet-watchdog
+Environment=FLEET_REF=released
+ExecStart=%h/fleet-watchdog/heartbeat/fleet-update.sh

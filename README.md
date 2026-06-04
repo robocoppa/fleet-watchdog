@@ -91,29 +91,78 @@ the comments in [registry.yaml](registry.yaml) for all keys.
 
 ### 4. Install the heartbeat sender on each laptop
 
-One sender per bot. Requires only `bash` + `curl`.
+One sender per bot. Requires only `bash` + `curl`. **Clone the repo once on the
+machine in a dir you own** (e.g. `~/fleet-watchdog`) — the schedulers run
+`heartbeat.sh` straight from that checkout (no `/usr/local/bin` copy), so the
+self-updater (next section) keeps the live script current with a plain
+`git pull`.
+
+```bash
+cd ~ && git clone https://github.com/robocoppa/fleet-watchdog.git
+```
 
 **systemd (recommended for always-on daemons):**
 
 ```bash
-sudo cp heartbeat/heartbeat.sh /usr/local/bin/fleet-heartbeat.sh
-sudo chmod +x /usr/local/bin/fleet-heartbeat.sh
-sudo cp heartbeat/fleet-heartbeat@.service heartbeat/fleet-heartbeat@.timer /etc/systemd/system/
+sudo cp ~/fleet-watchdog/heartbeat/fleet-heartbeat@.service heartbeat/fleet-heartbeat@.timer /etc/systemd/system/
+sudo $EDITOR /etc/systemd/system/fleet-heartbeat@.service   # set User=/Group= and the ExecStart path to your login user
 sudo mkdir -p /etc/fleet-heartbeat
-sudo cp heartbeat/env.example /etc/fleet-heartbeat/hermes-claudette.env
+sudo cp ~/fleet-watchdog/heartbeat/env.example /etc/fleet-heartbeat/hermes-claudette.env
 sudo $EDITOR /etc/fleet-heartbeat/hermes-claudette.env   # set BOT_ID/TOKEN/PROBE_CHAT/WATCHDOG_URL
 sudo chmod 600 /etc/fleet-heartbeat/hermes-claudette.env
 sudo systemctl enable --now fleet-heartbeat@hermes-claudette.timer
 ```
 
-The instance name after `@` is the bot id and selects its env file, so you run
-one timer per bot. Add another bot by dropping a second `.env` and enabling a
-second timer instance.
+The unit is a system unit but `User=`/`Group=` run the beat as the checkout
+owner, so it and the (`--user`) self-updater share one tree. The instance name
+after `@` is the bot id and selects its env file — one timer per bot.
 
-**cron (simpler laptops):** edit and install `heartbeat/cron-wrapper.sh`, then
-`*/5 * * * * /usr/local/bin/fleet-heartbeat-<bot>.sh`.
+**cron / launchd (Mac):** edit `heartbeat/cron-wrapper.sh` into
+`~/.fleet-heartbeat/<bot>.sh` (it execs `heartbeat.sh` from the checkout), then
+point cron or a launchd plist at that wrapper. See the Mac runbook for launchd.
 
 The `BOT_ID` in each env file **must match** the id in `registry.yaml`.
+
+### 5. Auto-update the fleet (optional but recommended)
+
+Because senders run `heartbeat.sh` *from the checkout*, a self-updater that
+pulls the checkout is the entire deploy — no reinstall, no `sudo` to ship code.
+Each host runs `heartbeat/fleet-update.sh` on a slow (~15 min) timer; it
+converges the checkout onto the **`released` git tag** and validates the
+incoming `heartbeat.sh` with `bash -n` before switching to it (a broken release
+is refused, the host stays on the last good commit).
+
+**Release model — the safety gate.** Push to `main` as often as you like;
+nothing deploys. When a commit is fleet-ready, move the tag:
+
+```bash
+git tag -f released        # tag current HEAD as the release
+git push -f origin released
+```
+
+Within ~15 min every host pulls that commit and its live `heartbeat.sh` updates.
+A half-finished push to `main` never reaches the fleet — only the tag does.
+
+Install the updater per machine (runs as **you**, on your user-owned checkout):
+
+```bash
+# Linux (systemd --user):
+mkdir -p ~/.config/systemd/user
+cp ~/fleet-watchdog/heartbeat/fleet-update.service heartbeat/fleet-update.timer ~/.config/systemd/user/
+$EDITOR ~/.config/systemd/user/fleet-update.service   # FLEET_REPO_DIR if not ~/fleet-watchdog
+systemctl --user daemon-reload && systemctl --user enable --now fleet-update.timer
+sudo loginctl enable-linger $USER     # so it runs while you're logged out
+
+# Mac (launchd): cp the example plist, edit the absolute paths, load it:
+cp ~/fleet-watchdog/heartbeat/com.fleet-watchdog.update.plist.example \
+   ~/Library/LaunchAgents/com.fleet-watchdog.update.plist
+$EDITOR ~/Library/LaunchAgents/com.fleet-watchdog.update.plist   # set /Users/<you> paths
+launchctl load ~/Library/LaunchAgents/com.fleet-watchdog.update.plist
+```
+
+Force an immediate poll: `systemctl --user start fleet-update` (Linux) or
+`launchctl start com.fleet-watchdog.update` (Mac). The updater is silent when
+already current; it logs every other outcome to its `.err`/journal.
 
 ## Local development
 

@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  macOS launchd job for fleet self-update. Polls the `released` tag every 15 min
+  and converges the checkout onto it. Runs as YOU (LaunchAgent), since the
+  schedulers run heartbeat.sh straight from your user-owned checkout — no sudo,
+  no /usr/local/bin copy.
+
+  Install (once per machine):
+    # clone the repo somewhere you own, e.g. ~/fleet-watchdog (the heartbeat
+    # plist's ProgramArguments already points at it for the live script).
+    cp heartbeat/com.fleet-watchdog.update.plist.example \
+       ~/Library/LaunchAgents/com.fleet-watchdog.update.plist
+    # edit the ABSOLUTE paths below: replace /Users/brigitte with your home
+    # (run `echo $HOME` if unsure). launchd does NOT expand ~.
+    launchctl load ~/Library/LaunchAgents/com.fleet-watchdog.update.plist
+
+  Manage:
+    launchctl list | grep fleet-watchdog.update
+    launchctl start com.fleet-watchdog.update          # force an update poll now
+    launchctl unload ~/Library/LaunchAgents/com.fleet-watchdog.update.plist
+
+  StartInterval is 900s (15 min) — far slower than the 300s heartbeat; this is
+  a deploy poll, not a liveness beat. RunAtLoad pulls once on load. Note launchd
+  does NOT fire while the Mac is asleep; a sleepy laptop just updates after it
+  wakes (next interval), which is fine for a deploy poll.
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.fleet-watchdog.update</string>
+
+    <!-- ABSOLUTE path to the updater inside your checkout. launchd won't
+         expand ~ — replace /Users/brigitte with your home dir. -->
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/brigitte/fleet-watchdog/heartbeat/fleet-update.sh</string>
+    </array>
+
+    <!-- Tell the updater where the checkout is and which ref to track.
+         FLEET_REPO_DIR must be an absolute path (launchd, no ~). -->
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>FLEET_REPO_DIR</key>
+        <string>/Users/brigitte/fleet-watchdog</string>
+        <key>FLEET_REF</key>
+        <string>released</string>
+    </dict>
+
+    <!-- Poll every 15 min (deploy cadence, not the 5-min heartbeat). -->
+    <key>StartInterval</key>
+    <integer>900</integer>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <!-- Logs for debugging the updater. -->
+    <key>StandardOutPath</key>
+    <string>/tmp/fleet-update.log</string>
+    <key>StandardErrorPath</key>
+    <string>/tmp/fleet-update.err</string>
+</dict>
+</plist>
