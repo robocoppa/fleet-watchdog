@@ -20,7 +20,11 @@ export WATCHDOG_URL="http://192.168.1.11:9099/beat"
 export HOST_LABEL="claudette-laptop"
 # export BACKEND_URL="http://192.168.1.11:11434/api/version"
 
-# Path to the checkout's heartbeat.sh. $HOME works here (the wrapper runs in a
-# shell, unlike a launchd ProgramArguments entry). Edit if cloned elsewhere.
-FLEET_CHECKOUT="${FLEET_CHECKOUT:-$HOME/fleet-watchdog}"
+# Path to the checkout's heartbeat.sh. MUST be ABSOLUTE — do NOT use $HOME here.
+# launchd execs this wrapper in a stripped environment where $HOME is often
+# UNSET, so "$HOME/fleet-watchdog" resolves to "/fleet-watchdog", the exec
+# fails, and launchd reports exit 78 (EX_CONFIG) with an EMPTY .err because
+# heartbeat.sh never starts. (This exact bug paged the fleet — caught 2026-06-04.)
+# Set the literal path for THIS user/host; this file is already per-bot anyway.
+FLEET_CHECKOUT="${FLEET_CHECKOUT:-/Users/CHANGE_ME/fleet-watchdog}"
 exec "${FLEET_CHECKOUT}/heartbeat/heartbeat.sh"

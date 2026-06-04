@@ -29,6 +29,14 @@
 
 set -u
 
+# Set an explicit PATH. launchd (and cron) run jobs with a minimal or empty
+# environment — often no usable PATH — so bare `curl`/`date`/`hostname`/`grep`/
+# `sed` can fail to resolve. That fails SILENTLY in a nasty way: even the log()
+# helper below calls `date`, so if PATH is empty the script can't write its own
+# error and you get the dreaded exit-nonzero-with-EMPTY-.err. Covers BSD/macOS
+# (/usr/bin, /bin) and Linux + Homebrew (/usr/local/bin, /opt/homebrew/bin).
+export PATH="/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin:${PATH:-}"
+
 # Timestamped stderr logger. Every failure path logs through this so a bad
 # scheduled run leaves a trail in StandardErrorPath (the .err file) instead of
 # an empty file — an empty .err next to a nonzero exit is the single hardest

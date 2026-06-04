@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  macOS launchd KEEP-ALIVE heartbeat agent. Use this INSTEAD of the
+  StartInterval plist on Macs.
+
+  WHY: launchd's StartInterval is a loose, power-managed scheduler — on an idle
+  Mac it throttled a "180s" heartbeat to ~18 min between runs, overrunning the
+  hub's stale_after and firing false 🔴 pages (brigitte, Mac mini, 2026-06-04).
+  This model sidesteps that entirely: launchd just keeps the process ALIVE
+  (KeepAlive), and the heartbeat-loop.sh script controls cadence with an honest
+  `sleep`. No coalescing, no throttling.
+
+  The per-bot WRAPPER (~/.fleet-heartbeat/<bot>.sh) must exec heartbeat-LOOP.sh
+  (not heartbeat.sh) for this model. Set BEAT_INTERVAL in the wrapper if you
+  want something other than 300s.
+
+  Install (one .plist per bot):
+    # edit ~/.fleet-heartbeat/brigitte.sh so its last line is:
+    #   exec "/Users/brigitte/fleet-watchdog/heartbeat/heartbeat-loop.sh"
+    # (and optionally `export BEAT_INTERVAL=300` above it)
+    cp heartbeat/com.fleet-watchdog.heartbeat-keepalive.plist.example \
+       ~/Library/LaunchAgents/com.fleet-watchdog.brigitte.plist
+    # edit the absolute wrapper path below (launchd does NOT expand ~), then:
+    launchctl bootout  gui/$(id -u)/com.fleet-watchdog.brigitte   2>/dev/null
+    launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.fleet-watchdog.brigitte.plist
+
+  Manage:
+    launchctl print gui/$(id -u)/com.fleet-watchdog.brigitte | grep -iE 'state|pid'
+    tail -f /tmp/fleet-heartbeat-brigitte.err     # the loop logs each start here
+
+  NOTE: a KeepAlive job stops while the Mac SLEEPS and launchd relaunches it on
+  wake — so a sleeping laptop still goes stale (correct: it IS unreachable).
+  A Mac mini that never sleeps beats continuously.
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.fleet-watchdog.brigitte</string>
+
+    <!-- The per-bot wrapper, which must exec heartbeat-LOOP.sh. ABSOLUTE path
+         — launchd does not expand ~. Replace 'brigitte' with your user + bot. -->
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/brigitte/.fleet-heartbeat/brigitte.sh</string>
+    </array>
+
+    <!-- Keep the process alive: relaunch it if it ever exits/crashes. This is
+         the whole point — launchd maintains liveness, the script self-paces.
+         NOTE: there is deliberately NO StartInterval here. -->
+    <key>KeepAlive</key>
+    <true/>
+
+    <!-- Start immediately on load. -->
+    <key>RunAtLoad</key>
+    <true/>
+
+    <!-- Don't let launchd throttle/deprioritize the long-running loop. -->
+    <key>ProcessType</key>
+    <string>Interactive</string>
+
+    <!-- If the loop exits fast (misconfig), this caps respawn rate so launchd
+         doesn't hot-loop it. 10s between relaunches. -->
+    <key>ThrottleInterval</key>
+    <integer>10</integer>
+
+    <!-- Logs. The loop writes a line to .err on each heartbeat.sh start and on
+         any failure. -->
+    <key>StandardOutPath</key>
+    <string>/tmp/fleet-heartbeat-brigitte.log</string>
+    <key>StandardErrorPath</key>
+    <string>/tmp/fleet-heartbeat-brigitte.err</string>
+</dict>
+</plist>

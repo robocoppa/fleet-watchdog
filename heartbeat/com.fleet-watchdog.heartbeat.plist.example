@@ -49,11 +49,25 @@
         <string>/Users/brigitte/.fleet-heartbeat/brigitte.sh</string>
     </array>
 
-    <!-- Fire every 300s (5 min) — matches the systemd timer's cadence.
-         launchd also fires once at load, so the first beat is immediate.
-         Keep in sync with the hub's stale_after (>= 2x this + margin). -->
+    <!-- Fire every 180s (3 min). NOTE: unlike a systemd timer, launchd's
+         StartInterval is NOT punctual — launchd coalesces/defers background
+         jobs for power efficiency, so a "300s" job on an idle Mac can slip to
+         10-13 min between runs (observed on the brigitte mini, 2026-06-04).
+         That overran the hub's 700s stale_after and caused false 🔴 pages.
+         Fix is twofold: (1) a shorter interval here so even a slipped/doubled
+         fire stays fresh, and (2) a LOOSER stale_after for Mac bots in the
+         hub's registry.yaml (e.g. 1100s) to tolerate launchd's jitter.
+         launchd also fires once at load (RunAtLoad), so the first beat is
+         immediate. -->
     <key>StartInterval</key>
-    <integer>300</integer>
+    <integer>180</integer>
+
+    <!-- ProcessType Interactive asks launchd NOT to throttle/deprioritize this
+         job under timer coalescing & App Nap — it still slips somewhat, but
+         far less than the default Background type. This is the lever that makes
+         StartInterval closer to honest on an idle Mac. -->
+    <key>ProcessType</key>
+    <string>Interactive</string>
 
     <!-- Don't keep it resident; it's a one-shot that exits each run. -->
     <key>RunAtLoad</key>
