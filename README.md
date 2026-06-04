@@ -26,10 +26,16 @@ distinct failure signals — not just "is the box on":
 | `getme_ok: false` | token revoked, or Telegram itself unreachable |
 | `backend_ok: false` (opt-in) | model backend (Ollama/Audrey) down |
 
-The `send_ok` check is a **real `sendMessage` to the bot's actual target chat,
-immediately deleted** — so it proves end-to-end send capability against the chat
-that matters, without leaving spam. `getMe` alone would *not* catch a
-blocked/kicked bot; the send probe does.
+The `send_ok` check is a **real `sendMessage` to a shared, muted probe
+channel** (not deleted) — so it proves the bot can actually post on Telegram
+without cluttering any real chat. `getMe` alone would *not* catch a
+rate-limited or restricted bot; the send probe does.
+
+> Note: this proves the bot can send *somewhere*, not specifically to its real
+> chat — it won't catch the bot being kicked from one particular real chat.
+> Every other failure mode (token revoked, rate-limited, Telegram down, daemon
+> dead) produces the same signal. Posting to a muted probe channel was chosen
+> over send-to-real-chat-then-delete to keep real chats free of probe spam.
 
 ## Architecture
 
@@ -38,7 +44,7 @@ each laptop, per bot                          Unraid hub (always on)
 ┌───────────────────────────┐                ┌──────────────────────────────┐
 │ heartbeat.sh (timer/cron)  │                │ fleet-watchdog container :9099 │
 │  • getMe self-check        │   POST /beat   │  • records last-seen per bot   │
-│  • sendMessage+delete probe │ ─────JSON────► │  • watchdog loop every 60s:    │
+│  • send probe → probe chan │ ─────JSON────► │  • watchdog loop every 60s:    │
 │  • optional backend probe  │                │     stale / send_fail /        │
 │  POSTs {bot,host,send_ok,  │                │     token_fail / backend_fail  │
 │         send_error,...}     │                │  • edge-triggered Telegram     │
@@ -95,7 +101,7 @@ sudo chmod +x /usr/local/bin/fleet-heartbeat.sh
 sudo cp heartbeat/fleet-heartbeat@.service heartbeat/fleet-heartbeat@.timer /etc/systemd/system/
 sudo mkdir -p /etc/fleet-heartbeat
 sudo cp heartbeat/env.example /etc/fleet-heartbeat/hermes-claudette.env
-sudo $EDITOR /etc/fleet-heartbeat/hermes-claudette.env   # set BOT_ID/TOKEN/TARGET_CHAT/WATCHDOG_URL
+sudo $EDITOR /etc/fleet-heartbeat/hermes-claudette.env   # set BOT_ID/TOKEN/PROBE_CHAT/WATCHDOG_URL
 sudo chmod 600 /etc/fleet-heartbeat/hermes-claudette.env
 sudo systemctl enable --now fleet-heartbeat@hermes-claudette.timer
 ```
@@ -105,7 +111,7 @@ one timer per bot. Add another bot by dropping a second `.env` and enabling a
 second timer instance.
 
 **cron (simpler laptops):** edit and install `heartbeat/cron-wrapper.sh`, then
-`*/2 * * * * /usr/local/bin/fleet-heartbeat-<bot>.sh`.
+`*/5 * * * * /usr/local/bin/fleet-heartbeat-<bot>.sh`.
 
 The `BOT_ID` in each env file **must match** the id in `registry.yaml`.
 

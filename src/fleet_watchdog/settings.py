@@ -16,7 +16,8 @@ a YAML file so you can add a laptop without redeploying the container.
       WATCHDOG_HOST         Bind host. Default 0.0.0.0.
       WATCHDOG_PORT         Bind port. Default 9099.
       WATCHDOG_DEFAULT_STALE  Fallback stale_after (seconds) for bots not
-                            listed in the registry. Default 600.
+                            listed in the registry. Default 700 (two missed
+                            5-min beats).
       WATCHDOG_TICK         Watchdog loop interval (seconds). Default 60.
 """
 
@@ -50,6 +51,6 @@ def load_settings() -> Settings:
         state_path=os.getenv("WATCHDOG_STATE", "/data/state.json"),
         host=os.getenv("WATCHDOG_HOST", "0.0.0.0"),
         port=int(os.getenv("WATCHDOG_PORT", "9099")),
-        default_stale_after=int(os.getenv("WATCHDOG_DEFAULT_STALE", "600")),
+        default_stale_after=int(os.getenv("WATCHDOG_DEFAULT_STALE", "700")),
         tick_seconds=int(os.getenv("WATCHDOG_TICK", "60")),
     )

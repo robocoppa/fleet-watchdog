@@ -3,17 +3,24 @@
 # Fleet heartbeat sender — runs on each laptop, once per bot, every few minutes.
 #
 # It does the bot's own self-checks against Telegram and POSTs the result to the
-# watchdog on Unraid. The key check is the SEND PROBE: it actually sends a
-# message to the bot's real target chat and immediately deletes it, proving the
-# bot can post to that chat (catches blocked / kicked / chat-migrated /
-# rate-limited — failures that getMe alone would miss).
+# watchdog on Unraid. The key check is the SEND PROBE: it sends a message to a
+# dedicated PROBE CHANNEL (a private, muted channel that exists only for these
+# heartbeats), proving the bot can actually post on Telegram — catches token
+# revoked / rate-limited / Telegram down, failures that getMe alone misses.
+#
+# Why a probe channel and not the bot's real chat: the message is NOT deleted,
+# so probing the real chat would clutter it. A shared probe channel you mute
+# and never read keeps real chats clean. (Trade-off: this proves the bot can
+# send *somewhere*, not specifically to its real chat — it won't catch the bot
+# being kicked from one particular real chat. Every other failure mode is the
+# same signal.)
 #
 # Requires: bash, curl. (No python, no jq.)
 #
 # Configure via environment (e.g. in a systemd unit or cron wrapper):
-#   BOT_ID        stable id matching registry.yaml, e.g. "hermes-claudette"   (required)
+#   BOT_ID        stable id matching registry.yaml, e.g. "brigitte"            (required)
 #   BOT_TOKEN     the MONITORED bot's own Telegram token                       (required)
-#   TARGET_CHAT   the chat id the bot normally posts to (the send probe target)(required)
+#   PROBE_CHAT    chat id of the shared probe channel the bot posts to         (required)
 #   WATCHDOG_URL  e.g. http://192.168.1.11:9099/beat                           (required)
 #   BACKEND_URL   optional: model backend health url to probe (Ollama/Audrey)
 #   HOST_LABEL    optional: machine name for the alert text (default: hostname)
@@ -24,7 +31,7 @@ set -u
 
 : "${BOT_ID:?set BOT_ID}"
 : "${BOT_TOKEN:?set BOT_TOKEN}"
-: "${TARGET_CHAT:?set TARGET_CHAT}"
+: "${PROBE_CHAT:?set PROBE_CHAT}"
 : "${WATCHDOG_URL:?set WATCHDOG_URL}"
 HOST_LABEL="${HOST_LABEL:-$(hostname)}"
 API="https://api.telegram.org/bot${BOT_TOKEN}"
@@ -39,12 +46,14 @@ if ! curl -fsS --max-time 10 "${API}/getMe" >/dev/null 2>&1; then
   getme_ok=false
 fi
 
-# --- send probe: real sendMessage to the target chat, then delete ----------
+# --- send probe: post to the shared probe channel (no delete) ---------------
+# The message names the bot + host so a shared channel stays legible. We mute
+# the channel and never read it; the messages just accumulate harmlessly.
 # Only attempt if getMe passed (no point if Telegram is unreachable).
 if [ "${getme_ok}" = "true" ]; then
-  probe_text="🩺 watchdog probe $(date -u +%H:%M:%SZ)"
+  probe_text="🩺 ${BOT_ID}@${HOST_LABEL} $(date -u +%H:%M:%SZ)"
   resp="$(curl -fsS --max-time 15 -G "${API}/sendMessage" \
-            --data-urlencode "chat_id=${TARGET_CHAT}" \
+            --data-urlencode "chat_id=${PROBE_CHAT}" \
             --data-urlencode "text=${probe_text}" \
             --data-urlencode "disable_notification=true" 2>/dev/null)"
   rc=$?
@@ -52,13 +61,7 @@ if [ "${getme_ok}" = "true" ]; then
     send_ok=false
     send_error="sendMessage transport error (rc=${rc})"
   elif printf '%s' "${resp}" | grep -q '"ok":true'; then
-    # Extract message_id (grep/sed only, no jq) and delete the probe message.
-    msg_id="$(printf '%s' "${resp}" | grep -o '"message_id":[0-9]*' | head -1 | grep -o '[0-9]*')"
-    if [ -n "${msg_id}" ]; then
-      curl -fsS --max-time 10 -G "${API}/deleteMessage" \
-        --data-urlencode "chat_id=${TARGET_CHAT}" \
-        --data-urlencode "message_id=${msg_id}" >/dev/null 2>&1 || true
-    fi
+    : # posted fine — nothing to clean up, the message stays in the probe channel
   else
     # Telegram returned ok:false — pull the human-readable reason.
     send_ok=false

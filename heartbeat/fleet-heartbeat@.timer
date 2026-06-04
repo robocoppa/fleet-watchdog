@@ -1,15 +1,19 @@
-# Fires the heartbeat for bot %i every 2 minutes (with a small randomized
+# Fires the heartbeat for bot %i every 5 minutes (with a small randomized
 # delay so a fleet of laptops doesn't all hit Unraid on the same second).
-#   sudo systemctl enable --now fleet-heartbeat@hermes-claudette.timer
+#   sudo systemctl enable --now fleet-heartbeat@brigitte.timer
+#
+# Cadence note: keep this in sync with the hub's stale_after thresholds in
+# registry.yaml. Rule of thumb: stale_after >= 2x this interval + margin, so
+# one dropped beat doesn't false-alarm. 5min beat -> 700s (~12min) stale.
 
 [Unit]
 Description=Fleet heartbeat timer for bot %i
 
 [Timer]
 OnBootSec=30s
-OnUnitActiveSec=2min
-RandomizedDelaySec=20s
-AccuracySec=5s
+OnUnitActiveSec=5min
+RandomizedDelaySec=30s
+AccuracySec=10s
 
 [Install]
 WantedBy=timers.target
