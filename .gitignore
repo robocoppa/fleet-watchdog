@@ -5,6 +5,12 @@ state.json
 # Local secrets — never commit the watcher-bot token or chat id.
 .env
 
+# Real fleet registry — deployment-specific (your actual bot ids + per-bot
+# policy). Ship registry.yaml.example as the template; keep the real one local
+# so `git pull` on the hub never reverts hand-tuned thresholds (this bit us:
+# a pull on Unraid reset brigitte's stale_after back to the committed default).
+registry.yaml
+
 # Python
 __pycache__/
 *.pyc

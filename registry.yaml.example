@@ -10,22 +10,35 @@
 #
 # The `bot:` ids here MUST match the BOT_ID the laptop sends.
 #
+# COPY THIS to registry.yaml and edit for your fleet. The real registry.yaml is
+# GITIGNORED so `git pull` on the hub never reverts your hand-tuned thresholds.
+#
 # stale_after vs. heartbeat cadence: senders beat every 5 min (300s). Set
 # stale_after >= 2x the interval + margin so one dropped/late beat doesn't
 # false-alarm. 700s = "two missed 5-min beats" -> alert ~12 min after a bot
 # actually dies. Tighten toward 350s for faster (noisier) detection.
+#
+# MAC (launchd) BOTS NEED A LOOSER stale_after. launchd's StartInterval is a
+# loose, power-managed scheduler that can slip a "5-min" beat to 15+ min on an
+# idle Mac — so a Mac on the StartInterval model needs stale_after ~1100s+ to
+# avoid false pages. BETTER: run Mac senders via the KEEP-ALIVE loop model
+# (heartbeat-loop.sh + the keepalive plist), which self-paces with an honest
+# sleep and beats reliably — then a Mac can use the normal 700s like Linux.
 
 bots:
-  # An always-on bot. Alert if it misses two beats.
+  # Linux (systemd timer) — punctual; standard 700s is fine.
+  claudette:
+    expected_up: true
+    stale_after: 700
+  donna:
+    expected_up: true
+    stale_after: 700
+
+  # Mac (launchd). On the keep-alive loop model, 700s is fine. If still on the
+  # StartInterval model, widen to ~1100s to absorb launchd's scheduling jitter.
   brigitte:
     expected_up: true
     stale_after: 700
-
-  # Always-on, and watch its model backend too.
-  desk-bot:
-    expected_up: true
-    stale_after: 700
-    alert_on_backend_fail: true   # this one's backend is the always-on Ollama
 
   # A roaming laptop that comes and goes — present in /status, but no alert
   # when it sleeps. Flip expected_up to true if you want to be told.
