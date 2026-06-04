@@ -7,12 +7,19 @@
   job runs a per-bot WRAPPER script that exports the vars then execs
   heartbeat.sh. cron-wrapper.sh already does exactly that — reuse it.
 
-  Install (one .plist per bot — rename for each):
+  Install (one .plist per bot — rename for each). The SHARED script goes in
+  root-owned /usr/local/bin; the PER-BOT WRAPPER (holds a token) goes in
+  your HOME dir so no sudo / root-ownership is needed and a LaunchAgent can
+  read it:
+    sudo mkdir -p /usr/local/bin                                   # Apple Silicon: doesn't exist by default
     sudo cp heartbeat/heartbeat.sh /usr/local/bin/fleet-heartbeat.sh
     sudo chmod +x /usr/local/bin/fleet-heartbeat.sh
-    cp heartbeat/cron-wrapper.sh /usr/local/bin/fleet-heartbeat-brigitte.sh
-    # edit that wrapper: set BOT_ID=brigitte, BOT_TOKEN, PROBE_CHAT, WATCHDOG_URL, HOST_LABEL
-    chmod +x /usr/local/bin/fleet-heartbeat-brigitte.sh
+
+    mkdir -p ~/.fleet-heartbeat
+    cp heartbeat/cron-wrapper.sh ~/.fleet-heartbeat/brigitte.sh
+    chmod 700 ~/.fleet-heartbeat/brigitte.sh
+    # edit that wrapper: set BOT_ID, BOT_TOKEN, PROBE_CHAT, WATCHDOG_URL,
+    # HOST_LABEL; confirm its last line is: exec /usr/local/bin/fleet-heartbeat.sh
 
     # rename Label + ProgramArguments + log paths below for this bot, then:
     cp heartbeat/com.fleet-watchdog.heartbeat.plist.example \
@@ -24,6 +31,9 @@
   as that user. Use a LaunchDaemon (/Library/LaunchDaemons, runs as root)
   only if the bot is a system service.
 
+  NOTE: launchd does NOT expand ~ — ProgramArguments must be an ABSOLUTE
+  path (e.g. /Users/brigitte/.fleet-heartbeat/brigitte.sh).
+
   Manage:
     launchctl list | grep fleet-watchdog        # is it loaded?
     launchctl start com.fleet-watchdog.brigitte  # fire once now
@@ -34,10 +44,12 @@
     <key>Label</key>
     <string>com.fleet-watchdog.brigitte</string>
 
-    <!-- The per-bot wrapper (exports env, execs heartbeat.sh). -->
+    <!-- The per-bot wrapper (exports env, execs heartbeat.sh).
+         ABSOLUTE path — launchd does not expand ~. Replace 'brigitte' with
+         your user + bot. -->
     <key>ProgramArguments</key>
     <array>
-        <string>/usr/local/bin/fleet-heartbeat-brigitte.sh</string>
+        <string>/Users/brigitte/.fleet-heartbeat/brigitte.sh</string>
     </array>
 
     <!-- Fire every 300s (5 min) — matches the systemd timer's cadence.
